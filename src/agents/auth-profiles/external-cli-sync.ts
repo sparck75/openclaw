@@ -2,12 +2,14 @@ import type { AuthProfileCredential, AuthProfileStore, OAuthCredential } from ".
 import {
   readQwenCliCredentialsCached,
   readMiniMaxCliCredentialsCached,
+  readClaudeCliCredentialsCached,
 } from "../cli-credentials.js";
 import {
   EXTERNAL_CLI_NEAR_EXPIRY_MS,
   EXTERNAL_CLI_SYNC_TTL_MS,
   QWEN_CLI_PROFILE_ID,
   MINIMAX_CLI_PROFILE_ID,
+  CLAUDE_CLI_PROFILE_ID,
   log,
 } from "./constants.js";
 
@@ -37,7 +39,11 @@ function isExternalProfileFresh(cred: AuthProfileCredential | undefined, now: nu
   if (cred.type !== "oauth" && cred.type !== "token") {
     return false;
   }
-  if (cred.provider !== "qwen-portal" && cred.provider !== "minimax-portal") {
+  if (
+    cred.provider !== "qwen-portal" &&
+    cred.provider !== "minimax-portal" &&
+    cred.provider !== "anthropic"
+  ) {
     return false;
   }
   if (typeof cred.expires !== "number") {
@@ -125,6 +131,19 @@ export function syncExternalCliCredentials(store: AuthProfileStore): boolean {
       MINIMAX_CLI_PROFILE_ID,
       "minimax-portal",
       () => readMiniMaxCliCredentialsCached({ ttlMs: EXTERNAL_CLI_SYNC_TTL_MS }),
+      now,
+    )
+  ) {
+    mutated = true;
+  }
+
+  // Sync from Claude Code CLI
+  if (
+    syncExternalCliCredentialsForProvider(
+      store,
+      CLAUDE_CLI_PROFILE_ID,
+      "anthropic",
+      () => readClaudeCliCredentialsCached({ ttlMs: EXTERNAL_CLI_SYNC_TTL_MS }),
       now,
     )
   ) {
