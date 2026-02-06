@@ -22,8 +22,9 @@ shouldCompact = contextTokens > (contextWindow - reserveTokens)
 ```
 
 **Actual overhead not accounted for:**
+
 - System prompt: ~5-10k tokens
-- Tool definitions: ~5-10k tokens  
+- Tool definitions: ~5-10k tokens
 - Project context (AGENTS.md, SOUL.md, etc.): ~5-15k tokens
 - **Total overhead: ~15-35k tokens**
 
@@ -39,17 +40,19 @@ So at 164k "context", actual prompt is ~180-200k → exceeds limit → E015 erro
 // Before
 export const DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR = 20_000;
 
-// After  
+// After
 export const DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR = 40_000;
 ```
 
 **Impact:**
+
 - New trigger threshold: 200,000 - 40,000 = **160,000 tokens (80%)**
 - Provides ~20% buffer for system overhead
 - Prevents the 82% failure scenario
 - Works immediately for all sessions
 
 **Why 40k?**
+
 - 40k / 200k = 20% reserve
 - Accounts for typical overhead: 15-35k tokens
 - Leaves safety margin for edge cases
@@ -60,20 +63,16 @@ export const DEFAULT_PI_COMPACTION_RESERVE_TOKENS_FLOOR = 40_000;
 Add system prompt + tool overhead to `calculateContextTokens()`:
 
 ```typescript
-export function calculateContextTokens(
-  usage: Usage, 
-  systemOverhead: number = 0
-): number {
-  const base = usage.totalTokens || 
-    usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
+export function calculateContextTokens(usage: Usage, systemOverhead: number = 0): number {
+  const base = usage.totalTokens || usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
   return base + systemOverhead;
 }
 ```
 
 Then in agent-session.js:
+
 ```typescript
-const systemOverhead = estimateSystemPromptTokens() + 
-                       estimateToolDefinitionTokens();
+const systemOverhead = estimateSystemPromptTokens() + estimateToolDefinitionTokens();
 const contextTokens = calculateContextTokens(usage, systemOverhead);
 ```
 
@@ -96,20 +95,23 @@ catch (error) {
 ## Testing
 
 ### Manual Test
+
 1. Start a long session
 2. Monitor token usage with `/status`
 3. Verify compaction triggers at ~160k tokens (80%)
 4. Confirm no E015 errors occur
 
 ### Automated Test
+
 Existing tests in `src/agents/pi-settings.test.ts` automatically use the new constant.
 
 ## Related Issues
 
 This fix addresses multiple related issues:
+
 - #7294 - HTTP 422 E015 at 82% context (this issue)
 - #5433 - Auto-compaction overflow recovery not triggering
-- #4261 - Claude CLI integration: compaction fails  
+- #4261 - Claude CLI integration: compaction fails
 - #5357, #5696, #5771 - Various context limit failures
 
 All likely caused by insufficient reserve buffer.
@@ -122,13 +124,14 @@ All likely caused by insufficient reserve buffer.
 agents:
   defaults:
     compaction:
-      reserveTokensFloor: 40000  # New default
+      reserveTokensFloor: 40000 # New default
       # Or set to 0 to disable floor enforcement
 ```
 
 ## Performance Impact
 
 **Minimal.** Compaction triggers slightly earlier (80% vs 91.8%), but:
+
 - Reduces crash rate significantly
 - Prevents expensive error recovery
 - Net positive for user experience
