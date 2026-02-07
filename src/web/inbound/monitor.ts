@@ -8,7 +8,7 @@ import { recordChannelActivity } from "../../infra/channel-activity.js";
 import { getChildLogger } from "../../logging/logger.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { saveMediaBuffer } from "../../media/store.js";
-import { jidToE164, resolveJidToE164 } from "../../utils.js";
+import { jidToE164, resolveJidToE164, toWhatsappJid } from "../../utils.js";
 import { createWaSocket, getStatusCode, waitForWaConnection } from "../session.js";
 import { checkInboundAccessControl } from "./access-control.js";
 import { isRecentInboundMessage } from "./dedupe.js";
@@ -274,7 +274,15 @@ export async function monitorWebInbox(options: {
         logVerbose(`Inbound media download failed: ${String(err)}`);
       }
 
-      const chatJid = remoteJid;
+      // For DMs with @lid JIDs, resolve to @s.whatsapp.net to avoid 421 Misdirected Request
+      let chatJid = remoteJid;
+      if (!group && /(@lid|@hosted\.lid)$/.test(remoteJid)) {
+        const resolvedE164 = await resolveInboundJid(remoteJid);
+        if (resolvedE164) {
+          chatJid = toWhatsappJid(resolvedE164);
+          logVerbose(`Resolved reply JID from ${remoteJid} to ${chatJid}`);
+        }
+      }
       const sendComposing = async () => {
         try {
           await sock.sendPresenceUpdate("composing", chatJid);

@@ -173,6 +173,33 @@ function createAnthropicOAuthHeadersWrapper(baseStreamFn: StreamFn | undefined):
 }
 
 /**
+ * Create a streamFn wrapper that adds Enterprise Copilot IDE headers.
+ * GitHub Copilot Enterprise requires Editor-Version and User-Agent headers
+ * for IDE authentication. These are configured in models.providers["github-copilot"].headers.
+ */
+function createGitHubCopilotEnterpriseHeadersWrapper(
+  baseStreamFn: StreamFn | undefined,
+  cfg: OpenClawConfig | undefined,
+): StreamFn {
+  const providerConfig = cfg?.models?.providers?.["github-copilot"];
+  const enterpriseHeaders = providerConfig?.headers;
+
+  if (!enterpriseHeaders || Object.keys(enterpriseHeaders).length === 0) {
+    return baseStreamFn ?? streamSimple;
+  }
+
+  const underlying = baseStreamFn ?? streamSimple;
+  return (model, context, options) =>
+    underlying(model, context, {
+      ...options,
+      headers: {
+        ...options?.headers,
+        ...enterpriseHeaders,
+      },
+    });
+}
+
+/**
  * Apply extra params (like temperature) to an agent's streamFn.
  * Also adds provider-specific headers (OpenRouter attribution,
  * Anthropic OAuth stealth-mode overrides).
@@ -215,5 +242,17 @@ export function applyExtraParamsToAgent(
   if (provider === "anthropic") {
     log.debug(`installing Anthropic OAuth stealth header wrapper for ${provider}/${modelId}`);
     agent.streamFn = createAnthropicOAuthHeadersWrapper(agent.streamFn);
+  }
+
+  // Apply Enterprise Copilot IDE headers from provider config.
+  // GitHub Copilot Enterprise requires Editor-Version and User-Agent headers.
+  if (provider === "github-copilot") {
+    const providerConfig = cfg?.models?.providers?.["github-copilot"];
+    if (providerConfig?.headers && Object.keys(providerConfig.headers).length > 0) {
+      log.debug(
+        `applying GitHub Copilot Enterprise IDE headers for ${provider}/${modelId}`,
+      );
+      agent.streamFn = createGitHubCopilotEnterpriseHeadersWrapper(agent.streamFn, cfg);
+    }
   }
 }
